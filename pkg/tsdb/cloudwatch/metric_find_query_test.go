@@ -3,6 +3,7 @@ package cloudwatch
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -54,40 +55,20 @@ func TestQuery_Metrics(t *testing.T) {
 		})
 
 		executor := newExecutor(im, newTestConfig(), fakeSessionCache{})
-		resp, err := executor.QueryData(context.Background(), &backend.QueryDataRequest{
-			PluginContext: backend.PluginContext{
+		resp, err := executor.handleGetMetrics(context.Background(), url.Values{
+			"region":    []string{"us-east-1"},
+			"namespace": []string{"custom"},
+		},
+			backend.PluginContext{
 				DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{},
 			},
-			Queries: []backend.DataQuery{
-				{
-					JSON: json.RawMessage(`{
-						"type":      "metricFindQuery",
-						"subtype":   "metrics",
-						"region":    "us-east-1",
-						"namespace": "custom"
-					}`),
-				},
-			},
-		})
+		)
 		require.NoError(t, err)
 
-		expFrame := data.NewFrame(
-			"",
-			data.NewField("text", nil, []string{"Test_MetricName"}),
-			data.NewField("value", nil, []string{"Test_MetricName"}),
-		)
-		expFrame.Meta = &data.FrameMeta{
-			Custom: map[string]interface{}{
-				"rowCount": 1,
-			},
+		expResponse := []suggestData{
+			{Text: "Test_MetricName", Value: "Test_MetricName", Label: "Test_MetricName"},
 		}
-
-		assert.Equal(t, &backend.QueryDataResponse{Responses: backend.Responses{
-			"": {
-				Frames: data.Frames{expFrame},
-			},
-		},
-		}, resp)
+		assert.Equal(t, expResponse, resp)
 	})
 
 	t.Run("Dimension keys for custom metrics", func(t *testing.T) {
@@ -109,39 +90,20 @@ func TestQuery_Metrics(t *testing.T) {
 		})
 
 		executor := newExecutor(im, newTestConfig(), fakeSessionCache{})
-		resp, err := executor.QueryData(context.Background(), &backend.QueryDataRequest{
-			PluginContext: backend.PluginContext{
+		resp, err := executor.handleGetDimensionKeys(context.Background(), url.Values{
+			"region":    []string{"us-east-1"},
+			"namespace": []string{"custom"},
+		},
+			backend.PluginContext{
 				DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{},
 			},
-			Queries: []backend.DataQuery{
-				{
-					JSON: json.RawMessage(`{
-						"type":      "metricFindQuery",
-						"subtype":   "dimension_keys",
-						"region":    "us-east-1",
-						"namespace": "custom"
-					}`),
-				},
-			},
-		})
+		)
 		require.NoError(t, err)
 
-		expFrame := data.NewFrame(
-			"",
-			data.NewField("text", nil, []string{"Test_DimensionName"}),
-			data.NewField("value", nil, []string{"Test_DimensionName"}),
-		)
-		expFrame.Meta = &data.FrameMeta{
-			Custom: map[string]interface{}{
-				"rowCount": 1,
-			},
+		expResponse := []suggestData{
+			{Text: "Test_DimensionName", Value: "Test_DimensionName", Label: "Test_DimensionName"},
 		}
-		assert.Equal(t, &backend.QueryDataResponse{Responses: backend.Responses{
-			"": {
-				Frames: data.Frames{expFrame},
-			},
-		},
-		}, resp)
+		assert.Equal(t, expResponse, resp)
 	})
 }
 
@@ -168,21 +130,14 @@ func TestQuery_Regions(t *testing.T) {
 		})
 
 		executor := newExecutor(im, newTestConfig(), fakeSessionCache{})
-		resp, err := executor.QueryData(context.Background(), &backend.QueryDataRequest{
-			PluginContext: backend.PluginContext{
+		resp, err := executor.handleGetRegions(context.Background(), url.Values{
+			"region":    []string{"us-east-1"},
+			"namespace": []string{"custom"},
+		},
+			backend.PluginContext{
 				DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{},
 			},
-			Queries: []backend.DataQuery{
-				{
-					JSON: json.RawMessage(`{
-						"type":      "metricFindQuery",
-						"subtype":   "regions",
-						"region":    "us-east-1",
-						"namespace": "custom"
-					}`),
-				},
-			},
-		})
+		)
 		require.NoError(t, err)
 
 		expRegions := append(knownRegions, regionName)
@@ -197,12 +152,11 @@ func TestQuery_Regions(t *testing.T) {
 			},
 		}
 
-		assert.Equal(t, &backend.QueryDataResponse{Responses: backend.Responses{
-			"": {
-				Frames: data.Frames{expFrame},
-			},
-		},
-		}, resp)
+		expResponse := []suggestData{}
+		for _, region := range expRegions {
+			expResponse = append(expResponse, suggestData{Text: region, Value: region, Label: region})
+		}
+		assert.Equal(t, expResponse, resp)
 	})
 }
 
@@ -242,44 +196,28 @@ func TestQuery_InstanceAttributes(t *testing.T) {
 			return datasourceInfo{}, nil
 		})
 
-		executor := newExecutor(im, newTestConfig(), fakeSessionCache{})
-		resp, err := executor.QueryData(context.Background(), &backend.QueryDataRequest{
-			PluginContext: backend.PluginContext{
-				DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{},
-			},
-			Queries: []backend.DataQuery{
-				{
-					JSON: json.RawMessage(`{
-						"type":          "metricFindQuery",
-						"subtype":       "ec2_instance_attribute",
-						"region":        "us-east-1",
-						"attributeName": "InstanceId",
-						"filters": {
-							"tag:Environment": ["production"]
-						}
-					}`),
-				},
-			},
-		})
+		filterMap := map[string][]string{
+			"tag:Environment": {"production"},
+		}
+		filterJson, err := json.Marshal(filterMap)
 		require.NoError(t, err)
 
-		expFrame := data.NewFrame(
-			"",
-			data.NewField("text", nil, []string{instanceID}),
-			data.NewField("value", nil, []string{instanceID}),
-		)
-		expFrame.Meta = &data.FrameMeta{
-			Custom: map[string]interface{}{
-				"rowCount": 1,
-			},
-		}
-
-		assert.Equal(t, &backend.QueryDataResponse{Responses: backend.Responses{
-			"": {
-				Frames: data.Frames{expFrame},
-			},
+		executor := newExecutor(im, newTestConfig(), fakeSessionCache{})
+		resp, err := executor.handleGetEc2InstanceAttribute(context.Background(), url.Values{
+			"region":        []string{"us-east-1"},
+			"attributeName": []string{"InstanceId"},
+			"filters":       []string{string(filterJson)},
 		},
-		}, resp)
+			backend.PluginContext{
+				DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{},
+			},
+		)
+		require.NoError(t, err)
+
+		expResponse := []suggestData{
+			{Text: instanceID, Value: instanceID, Label: instanceID},
+		}
+		assert.Equal(t, expResponse, resp)
 	})
 }
 
@@ -342,41 +280,22 @@ func TestQuery_EBSVolumeIDs(t *testing.T) {
 		})
 
 		executor := newExecutor(im, newTestConfig(), fakeSessionCache{})
-		resp, err := executor.QueryData(context.Background(), &backend.QueryDataRequest{
-			PluginContext: backend.PluginContext{
+		resp, err := executor.handleGetEbsVolumeIds(context.Background(), url.Values{
+			"region":     []string{"us-east-1"},
+			"instanceId": []string{"{i-1, i-2, i-3}"},
+		},
+			backend.PluginContext{
 				DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{},
 			},
-			Queries: []backend.DataQuery{
-				{
-					JSON: json.RawMessage(`{
-						"type":       "metricFindQuery",
-						"subtype":    "ebs_volume_ids",
-						"region":     "us-east-1",
-						"instanceId": "{i-1, i-2, i-3}"
-					}`),
-				},
-			},
-		})
+		)
 		require.NoError(t, err)
 
 		expValues := []string{"vol-1-1", "vol-1-2", "vol-2-1", "vol-2-2", "vol-3-1", "vol-3-2"}
-		expFrame := data.NewFrame(
-			"",
-			data.NewField("text", nil, expValues),
-			data.NewField("value", nil, expValues),
-		)
-		expFrame.Meta = &data.FrameMeta{
-			Custom: map[string]interface{}{
-				"rowCount": 6,
-			},
+		expResponse := []suggestData{}
+		for _, value := range expValues {
+			expResponse = append(expResponse, suggestData{Text: value, Value: value, Label: value})
 		}
-
-		assert.Equal(t, &backend.QueryDataResponse{Responses: backend.Responses{
-			"": {
-				Frames: data.Frames{expFrame},
-			},
-		},
-		}, resp)
+		assert.Equal(t, expResponse, resp)
 	})
 }
 
@@ -420,48 +339,33 @@ func TestQuery_ResourceARNs(t *testing.T) {
 			return datasourceInfo{}, nil
 		})
 
+		tagMap := map[string][]string{
+			"Environment": {"production"},
+		}
+		tagJson, err := json.Marshal(tagMap)
+		require.NoError(t, err)
+
 		executor := newExecutor(im, newTestConfig(), fakeSessionCache{})
-		resp, err := executor.QueryData(context.Background(), &backend.QueryDataRequest{
-			PluginContext: backend.PluginContext{
+		resp, err := executor.handleGetResourceArns(context.Background(), url.Values{
+			"region":       []string{"us-east-1"},
+			"resourceType": []string{"ec2:instance"},
+			"tags":         []string{string(tagJson)},
+		},
+			backend.PluginContext{
 				DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{},
 			},
-			Queries: []backend.DataQuery{
-				{
-					JSON: json.RawMessage(`{
-						"type":         "metricFindQuery",
-						"subtype":      "resource_arns",
-						"region":       "us-east-1",
-						"resourceType": "ec2:instance",
-						"tags": {
-							"Environment": ["production"]
-						}
-					}`),
-				},
-			},
-		})
+		)
 		require.NoError(t, err)
 
 		expValues := []string{
 			"arn:aws:ec2:us-east-1:123456789012:instance/i-12345678901234567",
 			"arn:aws:ec2:us-east-1:123456789012:instance/i-76543210987654321",
 		}
-		expFrame := data.NewFrame(
-			"",
-			data.NewField("text", nil, expValues),
-			data.NewField("value", nil, expValues),
-		)
-		expFrame.Meta = &data.FrameMeta{
-			Custom: map[string]interface{}{
-				"rowCount": 2,
-			},
+		expResponse := []suggestData{}
+		for _, value := range expValues {
+			expResponse = append(expResponse, suggestData{Text: value, Value: value, Label: value})
 		}
-
-		assert.Equal(t, &backend.QueryDataResponse{Responses: backend.Responses{
-			"": {
-				Frames: data.Frames{expFrame},
-			},
-		},
-		}, resp)
+		assert.Equal(t, expResponse, resp)
 	})
 }
 

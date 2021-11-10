@@ -581,6 +581,10 @@ export class CloudWatchDatasource
     );
   }
 
+  doMetricResourceRequest(subtype: string, parameters?: any): Promise<Array<{ text: any; label: any; value: any }>> {
+    return this.getResource(subtype, parameters);
+  }
+
   makeLogActionRequest(
     subtype: LogAction,
     queryParams: CloudWatchLogsRequest[],
@@ -665,14 +669,14 @@ export class CloudWatchDatasource
   }
 
   getRegions(): Promise<Array<{ label: string; value: string; text: string }>> {
-    return this.doMetricQueryRequest('regions', null).then((regions: any) => [
+    return this.doMetricResourceRequest('regions').then((regions: any) => [
       { label: 'default', value: 'default', text: 'default' },
       ...regions,
     ]);
   }
 
   getNamespaces() {
-    return this.doMetricQueryRequest('namespaces', null);
+    return this.doMetricResourceRequest('namespaces');
   }
 
   async getMetrics(namespace: string | undefined, region?: string) {
@@ -680,7 +684,7 @@ export class CloudWatchDatasource
       return [];
     }
 
-    return this.doMetricQueryRequest('metrics', {
+    return this.doMetricResourceRequest('metrics', {
       region: this.templateSrv.replace(this.getActualRegion(region)),
       namespace: this.templateSrv.replace(namespace),
     });
@@ -704,10 +708,10 @@ export class CloudWatchDatasource
       return [];
     }
 
-    return this.doMetricQueryRequest('dimension_keys', {
+    return this.doMetricResourceRequest('dimension-keys', {
       region: this.templateSrv.replace(this.getActualRegion(region)),
       namespace: this.templateSrv.replace(namespace),
-      dimensionFilters: this.convertDimensionFormat(dimensionFilters, {}),
+      dimensionFilters: JSON.stringify(this.convertDimensionFormat(dimensionFilters, {})),
       metricName,
     });
   }
@@ -723,37 +727,37 @@ export class CloudWatchDatasource
       return [];
     }
 
-    const values = await this.doMetricQueryRequest('dimension_values', {
+    const values = await this.doMetricResourceRequest('dimension-values', {
       region: this.templateSrv.replace(this.getActualRegion(region)),
       namespace: this.templateSrv.replace(namespace),
       metricName: this.templateSrv.replace(metricName.trim()),
       dimensionKey: this.templateSrv.replace(dimensionKey),
-      dimensions: this.convertDimensionFormat(filterDimensions, {}),
+      dimensions: JSON.stringify(this.convertDimensionFormat(filterDimensions, {})),
     });
 
     return values;
   }
 
   getEbsVolumeIds(region: string, instanceId: string) {
-    return this.doMetricQueryRequest('ebs_volume_ids', {
+    return this.doMetricResourceRequest('ebs-volume-ids', {
       region: this.templateSrv.replace(this.getActualRegion(region)),
       instanceId: this.templateSrv.replace(instanceId),
     });
   }
 
   getEc2InstanceAttribute(region: string, attributeName: string, filters: any) {
-    return this.doMetricQueryRequest('ec2_instance_attribute', {
+    return this.doMetricResourceRequest('ec2-instance-attribute', {
       region: this.templateSrv.replace(this.getActualRegion(region)),
       attributeName: this.templateSrv.replace(attributeName),
-      filters: filters,
+      filters: JSON.stringify(filters),
     });
   }
 
   getResourceARNs(region: string, resourceType: string, tags: any) {
-    return this.doMetricQueryRequest('resource_arns', {
+    return this.doMetricResourceRequest('resource-arns', {
       region: this.templateSrv.replace(this.getActualRegion(region)),
       resourceType: this.templateSrv.replace(resourceType),
-      tags: tags,
+      tags: JSON.stringify(tags),
     });
   }
 

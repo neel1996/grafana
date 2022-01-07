@@ -29,3 +29,6 @@ func (f FakeAlertingStore) GetLatestAlertmanagerConfiguration(query *models.GetL
 	}
 	return store.ErrNoAlertmanagerConfiguration
 }
+func (f FakeAlertingStore) UpdateAlertManagerConfiguration(cmd *models.SaveAlertmanagerConfigurationCmd) error {
+	return nil
+}

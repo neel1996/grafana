@@ -10,6 +10,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/go-macaron/binding"
 	"github.com/grafana/grafana/pkg/api/response"
 	"github.com/grafana/grafana/pkg/api/routing"
 	"github.com/grafana/grafana/pkg/middleware"

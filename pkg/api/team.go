@@ -117,8 +117,11 @@ func (hs *HTTPServer) SearchTeams(c *models.ReqContext) response.Response {
 	}
 
 	var userIdFilter int64
-	if hs.Cfg.EditorsCanAdmin && c.OrgRole != models.ROLE_ADMIN {
-		userIdFilter = c.SignedInUser.UserId
+	// Using accesscontrol the filtering is done based on user permissions
+	if !hs.Features.IsEnabled(featuremgmt.FlagAccesscontrol) {
+		if hs.Cfg.EditorsCanAdmin && c.OrgRole != models.ROLE_ADMIN {
+			userIdFilter = c.SignedInUser.UserId
+		}
 	}
 
 	query := models.SearchTeamsQuery{

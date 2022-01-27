@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/models"
 	ac "github.com/grafana/grafana/pkg/services/accesscontrol"
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
 )
 
 func (ss *SQLStore) addTeamQueryAndCommandHandlers() {
@@ -224,6 +225,20 @@ func (ss *SQLStore) SearchTeams(ctx context.Context, query *models.SearchTeamsQu
 		params = append(params, query.Name)
 	}
 
+	var (
+		acWhere string
+		acArgs  []interface{}
+		err     error
+	)
+	if ss.Cfg.IsFeatureToggleEnabled(featuremgmt.FlagAccesscontrol) {
+		acWhere, acArgs, err = ac.Filter(ctx, "team.id", "teams", ac.ActionTeamsRead, query.SignedInUser)
+		if err != nil {
+			return err
+		}
+		sql.WriteString(` and` + acWhere)
+		params = append(params, acArgs...)
+	}
+
 	sql.WriteString(` order by team.name asc`)
 
 	if query.Limit != 0 {
@@ -243,6 +258,11 @@ func (ss *SQLStore) SearchTeams(ctx context.Context, query *models.SearchTeamsQu
 
 	if query.Name != "" {
 		countSess.Where("name=?", query.Name)
+	}
+
+	// Only count teams user can see
+	if ss.Cfg.IsFeatureToggleEnabled(featuremgmt.FlagAccesscontrol) {
+		countSess.Where(acWhere, acArgs...)
 	}
 
 	count, err := countSess.Count(&team)

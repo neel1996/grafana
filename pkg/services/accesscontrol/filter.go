@@ -11,6 +11,7 @@ import (
 
 var sqlIDAcceptList = map[string]struct{}{
 	"org_user.user_id": {},
+	"user.id":          {},
 }
 
 const denyQuery = " 1 = 0"
@@ -23,7 +24,7 @@ func Filter(ctx context.Context, sqlID, prefix, action string, user *models.Sign
 	if _, ok := sqlIDAcceptList[sqlID]; !ok {
 		return denyQuery, nil, errors.New("sqlID is not in the accept list")
 	}
-	if user.Permissions == nil || user.Permissions[user.OrgId] == nil {
+	if user == nil || user.Permissions == nil || user.Permissions[user.OrgId] == nil {
 		return denyQuery, nil, errors.New("missing permissions")
 	}
 

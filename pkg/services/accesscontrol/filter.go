@@ -9,6 +9,11 @@ import (
 	"github.com/grafana/grafana/pkg/models"
 )
 
+type SqlFilter struct {
+	Where string
+	Args  []interface{}
+}
+
 var sqlIDAcceptList = map[string]struct{}{
 	"org_user.user_id": {},
 	"user.id":          {},
@@ -20,12 +25,12 @@ const allowAllQuery = " 1 = 1"
 // Filter creates a where clause to restrict the view of a query based on a users permissions
 // Scopes for a certain action will be compared against prefix:id:sqlID where prefix is the scope prefix and sqlID
 // is the id to generate scope from e.g. user.id
-func Filter(ctx context.Context, sqlID, prefix, action string, user *models.SignedInUser) (string, []interface{}, error) {
+func Filter(ctx context.Context, sqlID, prefix, action string, user *models.SignedInUser) (SqlFilter, error) {
 	if _, ok := sqlIDAcceptList[sqlID]; !ok {
-		return denyQuery, nil, errors.New("sqlID is not in the accept list")
+		return SqlFilter{denyQuery, nil}, errors.New("sqlID is not in the accept list")
 	}
 	if user == nil || user.Permissions == nil || user.Permissions[user.OrgId] == nil {
-		return denyQuery, nil, errors.New("missing permissions")
+		return SqlFilter{denyQuery, nil}, errors.New("missing permissions")
 	}
 
 	var hasWildcard bool
@@ -43,11 +48,11 @@ func Filter(ctx context.Context, sqlID, prefix, action string, user *models.Sign
 	}
 
 	if hasWildcard {
-		return allowAllQuery, nil, nil
+		return SqlFilter{allowAllQuery, nil}, nil
 	}
 
 	if len(ids) == 0 {
-		return denyQuery, nil, nil
+		return SqlFilter{denyQuery, nil}, nil
 	}
 
 	query := strings.Builder{}
@@ -58,7 +63,7 @@ func Filter(ctx context.Context, sqlID, prefix, action string, user *models.Sign
 	query.WriteString(strings.Repeat(",?", len(ids)-1))
 	query.WriteRune(')')
 
-	return query.String(), ids, nil
+	return SqlFilter{query.String(), ids}, nil
 }
 
 func parseScopeID(scope string) (int64, error) {

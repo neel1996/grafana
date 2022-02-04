@@ -211,10 +211,6 @@ func (m SQLStoreMock) GetTeamMembers(ctx context.Context, query *models.GetTeamM
 	return m.ExpectedError
 }
 
-func (m SQLStoreMock) GetFilteredTeamMembers(ctx context.Context, query *models.GetTeamMembersQuery) error {
-	return nil // TODO: Implement
-}
-
 func (m SQLStoreMock) NewSession(ctx context.Context) *sqlstore.DBSession {
 	return nil
 }
